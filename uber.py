@@ -40,7 +40,7 @@ def main():
     # Set up Chrome options
     options = Options()
     options.add_argument(r"C:\Users\sheet\AppData\Local\Google\Chrome\User Data")
-    options.add_argument("profile-directory=Default")
+    options.add_argument("--profile-directory=Default")
 
     # Start the browser
     driver = webdriver.Chrome(options=options)
@@ -53,7 +53,7 @@ def main():
 
     # Wait for the page to load completely
     try:
-        WebDriverWait(driver, 2000).until(EC.presence_of_element_located((By.CLASS_NAME, "_css-jsRibq")))
+        WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.CLASS_NAME, "_css-jsRibq")))
     except Exception as e:
         print("Error waiting for page to load:", e)
         driver.quit()
