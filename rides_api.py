@@ -53,7 +53,7 @@ def uber(pickup_lat: float, pickup_lng: float, drop_lat: float, drop_lng: float)
     url = f'https://m.uber.com/go/product-selection?drop%5B0%5D=%7B%22latitude%22%3A{drop_lat}%2C%22longitude%22%3A{drop_lng}%7D&pickup=%7B%22latitude%22%3A{pickup_lat}%2C%22longitude%22%3A{pickup_lng}%7D'
 
     options = Options()
-    options.add_argument(r"C:\Users\sheet\AppData\Local\Google\Chrome\User Data")
+    options.add_argument(r"user-data-dir=C:\Users\Shashank\AppData\Local\Google\Chrome\User Data")
     options.add_argument("--profile-directory=Default")
 
     driver = webdriver.Chrome(options=options)
@@ -93,6 +93,6 @@ def get_ride_options(
     drop_lng: float = Query(...)
 ):
     rapido_data = rapido(start_place, destination_place)
-    # uber_data = uber(pickup_lat, pickup_lng, drop_lat, drop_lng)
-    # return {"Rapido": rapido_data, "Uber": uber_data}
-    return {"Rapido": rapido_data}
+    uber_data = uber(pickup_lat, pickup_lng, drop_lat, drop_lng)
+    return {"Rapido": rapido_data, "Uber": uber_data}
+    # return {"Rapido": rapido_data}
