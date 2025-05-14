@@ -61,25 +61,30 @@ export default function HomeScreen() {
     setIsLoaded(true);
   }, []);
 
-  // When both source and destination are set, show the route and update ride data
+  // Only show the route when both source and destination are set
   useEffect(() => {
     if (sourceCoords && destinationCoords) {
-      console.log('Both source and destination coordinates are set, showing route');
       setShowRoute(true);
-      
-      // Update ride data JSON when both coordinates are set
-      if (currentLocation && destination) {
-        updateRideData(
+    } else {
+      setShowRoute(false);
+    }
+  }, [sourceCoords, destinationCoords]);
+  
+  // Update ride data only when actively submitting the search
+  const updateRideDataBeforeSearch = async () => {
+    if (currentLocation && destination && sourceCoords && destinationCoords) {
+      try {
+        await updateRideData(
           currentLocation,
           destination,
           sourceCoords,
           destinationCoords
-        ).catch(err => console.error('Error updating ride data:', err));
+        );
+      } catch (err) {
+        console.error('Error updating ride data:', err);
       }
-    } else {
-      setShowRoute(false);
     }
-  }, [sourceCoords, destinationCoords, currentLocation, destination]);
+  };
 
   // When a location is selected from autocomplete
   const handleSourceLocationSelect = (location: any) => {
@@ -192,28 +197,16 @@ export default function HomeScreen() {
       return;
     }
 
-    // Update ride data before navigating
+    // Update ride data before navigating - use our focused method to avoid unnecessary API calls
     try {
-      console.log('Updating ride data with:', {
-        currentLocation,
-        destination,
-        sourceCoords,
-        destinationCoords
-      });
+      await updateRideDataBeforeSearch();
       
-      // Update the ride data in memory
-      await updateRideData(
-        currentLocation,
-        destination,
-        sourceCoords,
-        destinationCoords
-      );
+      // Add a unique timestamp to force the compare page to recognize params change
+      const timestamp = Date.now().toString();
       
-      console.log('Successfully updated ride data, navigating to compare page');
-      
-      // First navigate to the compare page - the compare page will handle making the API request
+      // Navigate to compare screen with parameters
       router.push({
-        pathname: '/(app)/compare',
+        pathname: '/compare',
         params: {
           from: currentLocation,
           to: destination,
@@ -221,13 +214,14 @@ export default function HomeScreen() {
           fromLng: sourceCoords.longitude.toString(),
           toLat: destinationCoords.latitude.toString(),
           toLng: destinationCoords.longitude.toString(),
-          // Add a flag to indicate that we should trigger the API request upon navigation
-          triggerSearch: 'true'
-        },
+          triggerSearch: 'true',
+          ts: timestamp // Add timestamp to ensure params are seen as changed
+        }
       });
+      
     } catch (error) {
-      console.error('Error updating ride data:', error);
-      Alert.alert('Error', 'Failed to prepare ride data. Please try again.');
+      console.error('Error in handleSearch:', error);
+      Alert.alert('Error', 'Failed to update ride data. Please try again.');
     }
   };
 
@@ -296,7 +290,7 @@ export default function HomeScreen() {
         <View style={styles.inputsContainer}>
           <View style={[styles.locationInputWrapper, inputWrapperZIndex.source]}>
             <LocationInput
-              label="Pick-up"
+              label=""
               value={currentLocation}
               onChangeText={setCurrentLocation}
               placeholder="Your current location"
@@ -308,7 +302,7 @@ export default function HomeScreen() {
           
           <View style={[styles.locationInputWrapper, inputWrapperZIndex.destination]}>
             <LocationInput
-              label="Drop-off"
+              label=""
               value={destination}
               onChangeText={setDestination}
               placeholder="Your destination"
@@ -344,22 +338,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerContainer: {
-    padding: 8,
-    paddingTop: 30,
+    padding: 6,
+    paddingTop: Platform.OS === 'ios' ? 25 : 15,
   },
   title: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
   },
   subtitle: {
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 11,
+    marginTop: 0,
   },
   mapContainer: {
-    width: '100%',
-    height: 500,
-    position: 'relative',
     flex: 1,
+    position: 'relative',
+    height: height * 0.35,
   },
   map: {
     width: '100%',
@@ -367,52 +360,108 @@ const styles = StyleSheet.create({
   },
   mapControls: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    alignItems: 'center',
+    top: 8,
+    right: 8,
+    zIndex: 5,
   },
   mapControlButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.22,
+    shadowRadius: 2.22,
+    elevation: 3,
   },
   mapInstructions: {
-    padding: 6,
-    borderRadius: 4,
-    fontSize: 12,
+    padding: 4,
+    paddingHorizontal: 8,
+    borderRadius: 16,
+    fontSize: 10,
+    fontWeight: '500',
     textAlign: 'center',
-    overflow: 'hidden',
   },
   contentContainer: {
-    flex: 1,
-    padding: 24,
-    paddingTop: 32,
+    padding: 12,
+    paddingBottom: 20,
+    marginTop: 8,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '600',
-    marginBottom: 16,
+    marginBottom: 10,
   },
   inputsContainer: {
-    marginBottom: 24,
-    zIndex: 999, // Ensure this container is above other elements
+    marginBottom: 12,
   },
   locationInputWrapper: {
-    zIndex: 999, // Ensure all inputs and their dropdowns appear above other elements
-    marginBottom: 16,
-    position: 'relative',
+    marginBottom: 8,
   },
   searchButton: {
-    height: 54,
-    marginTop: 8,
-    zIndex: 1, // Lower z-index for the button
+    marginTop: 6,
+    zIndex: 1,
+    paddingVertical: 8,
+  },
+  inputContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 30 : 15,
+    left: 0,
+    right: 0,
+    padding: 8,
+    zIndex: 100,
+  },
+  inputsCard: {
+    borderRadius: 12,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    marginBottom: 10,
+  },
+  inputRow: {
+    marginBottom: 8,
+  },
+  divider: {
+    height: 1,
+    marginVertical: 8,
+  },
+  buttonContainer: {
+    marginTop: 6,
+  },
+  locationButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 6,
+  },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 4,
+    borderRadius: 6,
+  },
+  locationButtonText: {
+    marginLeft: 4,
+    fontSize: 11,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 999,
+  },
+  loadingText: {
+    marginTop: 6,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
+
+// ... (rest of the code remains the same)

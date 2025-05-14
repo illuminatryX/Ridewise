@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View, Image, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, Image, TouchableOpacity, Platform } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 
 type RideCardProps = {
@@ -89,23 +89,33 @@ export default function RideCard({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    padding: 12, // Reduced padding
+    borderRadius: 10, // Slightly smaller border radius
+    marginBottom: 8, // Reduced margin
+    // Use Platform-specific styling for shadows
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.1)',
+      },
+    }),
   },
   logoContainer: {
-    marginRight: 16,
+    marginRight: 12, // Reduced margin
     justifyContent: 'center',
   },
   logo: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32, // Reduced size
+    height: 32, // Reduced size
+    borderRadius: 16, // Adjusted border radius
   },
   detailsContainer: {
     flex: 1,
@@ -114,23 +124,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 2, // Reduced margin
   },
   company: {
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: 15, // Slightly smaller font
   },
   price: {
-    fontSize: 16,
+    fontSize: 15, // Slightly smaller font
     fontWeight: '700',
   },
   fleetType: {
-    fontSize: 14,
+    fontSize: 13, // Smaller font
   },
   eta: {
-    fontSize: 14,
+    fontSize: 13, // Smaller font
   },
   vehicleIcon: {
-    fontSize: 16,
+    fontSize: 14, // Smaller font
   },
 });

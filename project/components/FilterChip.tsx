@@ -41,15 +41,15 @@ export default function FilterChip({
 
 const styles = StyleSheet.create({
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 12, // Reduced horizontal padding
+    paddingVertical: 6, // Reduced vertical padding
+    borderRadius: 16, // Smaller border radius
     borderWidth: 1,
-    marginRight: 8,
-    marginBottom: 8,
+    marginRight: 6, // Reduced margin
+    marginBottom: 6, // Reduced margin
   },
   label: {
-    fontSize: 14,
+    fontSize: 13, // Smaller font size
     fontWeight: '500',
   },
 });

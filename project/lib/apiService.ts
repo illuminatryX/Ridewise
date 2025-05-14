@@ -49,22 +49,17 @@ interface ApiResponse<T = any> {
  */
 export const fetchRidePrices = async (rideData: RideApiInput): Promise<ApiResponse<ApiRideResponse>> => {
   try {
-    console.log('Fetching ride prices from API with data:', rideData);
-    
-    // Validate input data to ensure we don't send empty or invalid values
+    // Fast validation without logging to reduce overhead
     if (!rideData.start_place || !rideData.destination_place) {
-      console.error('Missing location names in ride data');
       throw new Error('Missing source or destination location names');
     }
     
     if (rideData.pickup_lat === 0 || rideData.pickup_lng === 0 ||
         rideData.drop_lat === 0 || rideData.drop_lng === 0) {
-      console.error('Invalid coordinates in ride data (zeros detected)');
       throw new Error('Invalid location coordinates');
     }
     
-    // Create a new ordered object with the exact property order required by the API
-    // This ensures properties are added to URLSearchParams in the correct order
+    // Create a new ordered object - simplified
     const orderedRideData = {
       start_place: rideData.start_place.trim(),
       destination_place: rideData.destination_place.trim(),
@@ -75,41 +70,33 @@ export const fetchRidePrices = async (rideData: RideApiInput): Promise<ApiRespon
     };
     
     // Convert the ride data to URL query parameters with the correct parameter names
-    // Using the ordered object to maintain proper parameter order
     const params = new URLSearchParams();
     
-    // Add parameters in the specific order (needed for some APIs)
-    // Start place must be first
+    // Add parameters quickly
     params.append('start_place', encodeURIComponent(orderedRideData.start_place));
-    // Destination place must be second
     params.append('destination_place', encodeURIComponent(orderedRideData.destination_place));
-    
-    // Then coordinates - with null/undefined checks
-    // Ensure each coordinate is a valid number before calling toFixed
-    params.append('pickup_lat', 
-      typeof orderedRideData.pickup_lat === 'number' ? orderedRideData.pickup_lat.toFixed(6) : '0');
-    params.append('pickup_lng', 
-      typeof orderedRideData.pickup_lng === 'number' ? orderedRideData.pickup_lng.toFixed(6) : '0');
-    params.append('drop_lat', 
-      typeof orderedRideData.drop_lat === 'number' ? orderedRideData.drop_lat.toFixed(6) : '0');
-    params.append('drop_lng', 
-      typeof orderedRideData.drop_lng === 'number' ? orderedRideData.drop_lng.toFixed(6) : '0');
+    params.append('pickup_lat', typeof orderedRideData.pickup_lat === 'number' ? orderedRideData.pickup_lat.toFixed(6) : '0');
+    params.append('pickup_lng', typeof orderedRideData.pickup_lng === 'number' ? orderedRideData.pickup_lng.toFixed(6) : '0');
+    params.append('drop_lat', typeof orderedRideData.drop_lat === 'number' ? orderedRideData.drop_lat.toFixed(6) : '0');
+    params.append('drop_lng', typeof orderedRideData.drop_lng === 'number' ? orderedRideData.drop_lng.toFixed(6) : '0');
 
-    // Build the URL
+    // Build the URL and make the request
     const url = `${API_ENDPOINT}?${params.toString()}`;
-    console.log('Fetching ride prices from URL:', url);
     
-    // Use our new fetchWithLogging function to ensure we always log the raw response
-    const { response, text, parsedData } = await fetchWithLogging(url, {
+    // Optimized fetch with fewer logging operations
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
       },
     });
     
+    // Parse JSON directly without intermediate text conversion
+    const parsedData = await response.json();
+    
     // Check if the request was successful
     if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status} - ${text}`);
+      throw new Error(`HTTP error! Status: ${response.status}`);
     }
     
     // Return a standardized response using the parsed data
@@ -119,7 +106,6 @@ export const fetchRidePrices = async (rideData: RideApiInput): Promise<ApiRespon
     };
     
   } catch (error: any) {
-    console.error('Error fetching ride prices:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred',

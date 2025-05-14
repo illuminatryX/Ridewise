@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, FlatList } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, FlatList, Platform } from 'react-native';
 import { MapPin } from 'lucide-react-native';
 import Input from './Input';
 import { useTheme } from '../context/ThemeContext';
@@ -41,16 +41,15 @@ export default function LocationInput({
   const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
-    // Fetch suggestions when value changes
+    // Fetch suggestions when value changes with reduced debounce time
     const fetchSuggestions = async () => {
-      if (value.length >= 3) {
+      if (value.length >= 3 && isFocused) { // Only fetch suggestions if input is focused
         setIsSearching(true);
         try {
           const results = await getLocationSuggestions(value);
           setSuggestions(results);
-          setShowSuggestions(results.length > 0);
-        } catch (error) {
-          console.error('Error fetching suggestions:', error);
+          // Only show suggestions if input is focused and we have results
+          setShowSuggestions(isFocused && results.length > 0);
         } finally {
           setIsSearching(false);
         }
@@ -60,9 +59,10 @@ export default function LocationInput({
       }
     };
 
-    const timerId = setTimeout(fetchSuggestions, 500); // Debounce search
+    // Reduced debounce time from 500ms to 300ms for faster response
+    const timerId = setTimeout(fetchSuggestions, 300);
     return () => clearTimeout(timerId);
-  }, [value]);
+  }, [value, isFocused]);
 
   const handleSuggestionSelect = (suggestion: LocationSuggestion) => {
     onChangeText(suggestion.address);
@@ -75,22 +75,22 @@ export default function LocationInput({
   return (
     <View style={styles.container}>
       <View style={styles.iconContainer}>
-        <MapPin size={20} color={iconColor || colors.primary} />
+        <MapPin size={18} color={iconColor || colors.primary} />
       </View>
       <View style={styles.inputContainer}>
-        <Text style={[styles.label, { color: colors.textSecondary }]}>
-          {label}
-        </Text>
         <Input
           value={value}
           onChangeText={onChangeText}
-          placeholder={placeholder}
+          placeholder={placeholder || label} // Use label as placeholder if none provided
           containerStyle={styles.input}
           onFocus={() => {
             if (onFocus) onFocus();
             setIsFocused(true);
+            // Only show suggestions if we already have results and user is focusing
             if (value.length >= 3 && suggestions.length > 0) {
               setShowSuggestions(true);
+            } else {
+              setShowSuggestions(false);
             }
           }}
           onBlur={() => {
@@ -144,25 +144,23 @@ export default function LocationInput({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 8,
+    alignItems: 'center',
+    marginBottom: 6,
     position: 'relative',
     zIndex: 10,
   },
   iconContainer: {
-    marginRight: 12,
-    paddingTop: 24,
+    marginRight: 8,
+    paddingTop: 0,
+    alignSelf: 'center',
   },
   inputContainer: {
     flex: 1,
     position: 'relative',
   },
-  label: {
-    fontSize: 12,
-    marginBottom: 4,
-  },
   input: {
     marginBottom: 0,
+    paddingVertical: 6,
   },
   suggestionsContainer: {
     position: 'absolute',
@@ -171,14 +169,23 @@ const styles = StyleSheet.create({
     right: 0,
     maxHeight: 200,
     zIndex: 9999,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
     borderRadius: 8,
     marginTop: 4,
     overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 5,
+      },
+      web: {
+        boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.3)',
+      },
+    }),
   },
   suggestionItem: {
     flexDirection: 'row',

@@ -8,6 +8,7 @@ import {
   Dimensions,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
@@ -32,6 +33,7 @@ export default function CompareScreen() {
     toLat: string;
     toLng: string;
     triggerSearch: string;
+    ts: string; // Timestamp to force parameter updates
   }>();
   const router = useRouter();
   const { colors } = useTheme();
@@ -61,20 +63,62 @@ export default function CompareScreen() {
       : null
   );
 
-  // Initial setup when the component first mounts
+  // Update state values when the URL parameters change
+  const prevParamsRef = React.useRef<string>("");
+  
   useEffect(() => {
-    // Don't load any mock data - start with an empty state
-    setRides([]);
-    setFilteredRides([]);
+    // Convert current params to string for comparison
+    const currentParamsString = JSON.stringify({
+      from: params.from,
+      to: params.to,
+      fromLat: params.fromLat,
+      fromLng: params.fromLng,
+      toLat: params.toLat,
+      toLng: params.toLng,
+      triggerSearch: params.triggerSearch,
+      ts: params.ts // Include timestamp to detect changes
+    });
     
-    // Auto-trigger API request immediately on page load/reload when we have location data
-    if (params.triggerSearch === 'true' || (sourceCoords && destinationCoords)) {
-      loadRides();
-    } else {
-      // Don't show loading if we're not making a request
-      setIsLoading(false);
+    // Only process if params have actually changed
+    if (prevParamsRef.current !== currentParamsString) {
+      prevParamsRef.current = currentParamsString;
+      
+      // Update source and destination inputs from params
+      if (params.from) {
+        setSource(params.from);
+      }
+      
+      if (params.to) {
+        setDestination(params.to);
+      }
+      
+      // Update coordinates if they exist in params
+      if (params.fromLat && params.fromLng) {
+        setSourceCoords({
+          latitude: parseFloat(params.fromLat),
+          longitude: parseFloat(params.fromLng)
+        });
+      }
+      
+      if (params.toLat && params.toLng) {
+        setDestinationCoords({
+          latitude: parseFloat(params.toLat),
+          longitude: parseFloat(params.toLng)
+        });
+      }
+      
+      // If we have sufficient data for a search and triggerSearch is true, load rides
+      if (params.triggerSearch === 'true' && 
+          params.fromLat && params.fromLng && params.toLat && params.toLng) {
+        // Schedule the API call to happen after state updates
+        setIsLoading(true);
+        setTimeout(() => loadRides(), 100);
+      } else {
+        // Don't show loading if we're not making a request
+        setIsLoading(false);
+      }
     }
-  }, []);
+  }, [params]); // Re-run this effect when params change
 
   useEffect(() => {
     // Apply filters when category changes
@@ -109,42 +153,29 @@ export default function CompareScreen() {
 
   const loadRides = async () => {
     try {
+      // Clear previous state and show loading indicator
       setIsLoading(true);
+      setRides([]);
+      setFilteredRides([]);
       
-      // Always use the coordinates from URL parameters to ensure data consistency
+      // Quick validation of coordinates
       if (!sourceCoords || !destinationCoords) {
         Alert.alert('Error', 'Missing location coordinates. Please try selecting locations again.');
         setIsLoading(false);
         return;
       }
       
-      // Log the coordinates from URL parameters that we're going to use
-      console.log('Using coordinates from URL params:', {
-        source: {
-          address: source,
-          lat: sourceCoords.latitude,
-          lng: sourceCoords.longitude
-        },
-        destination: {
-          address: destination,
-          lat: destinationCoords.latitude,
-          lng: destinationCoords.longitude
-        }
-      });
-      
-      // Create a fresh ride data object from the URL parameters
+      // Create ride data object directly from coordinates
       const rideData: RideApiInput = {
         start_place: source,
         destination_place: destination,
-        pickup_lat: sourceCoords.latitude,      // Updated to match API field names
-        pickup_lng: sourceCoords.longitude,     // Updated to match API field names
-        drop_lat: destinationCoords.latitude,   // Updated to match API field names
-        drop_lng: destinationCoords.longitude   // Updated to match API field names
+        pickup_lat: sourceCoords.latitude,
+        pickup_lng: sourceCoords.longitude,
+        drop_lat: destinationCoords.latitude,
+        drop_lng: destinationCoords.longitude
       };
       
-      console.log('Prepared fresh ride data for API:', rideData);
-      
-      // Update the in-memory ride data for consistency
+      // Update the ride data in memory for consistency
       await updateRideData(
         source,
         destination,
@@ -152,10 +183,10 @@ export default function CompareScreen() {
         destinationCoords
       );
       
-      // Generate local mock data directly to guarantee we have ride options
-      const mockRides: RideOption[] = [
+      // Generate fallback mock data for Uber and Rapido separately
+      const mockUberRides: RideOption[] = [
         {
-          id: 'uber-1',
+          id: 'uber-mock-1',
           company: 'Uber',
           fleetType: 'UberGo',
           eta: '4 min',
@@ -163,7 +194,7 @@ export default function CompareScreen() {
           category: 'Economy',
         },
         {
-          id: 'uber-2',
+          id: 'uber-mock-2',
           company: 'Uber',
           fleetType: 'Premier',
           eta: '6 min',
@@ -171,15 +202,18 @@ export default function CompareScreen() {
           category: 'Comfort',
         },
         {
-          id: 'uber-3',
+          id: 'uber-mock-3',
           company: 'Uber',
           fleetType: 'UberXL',
           eta: '8 min',
           price: '₹480',
           category: 'Extra Large',
         },
+      ];
+      
+      const mockRapidoRides: RideOption[] = [
         {
-          id: 'rapido-1',
+          id: 'rapido-mock-1',
           company: 'Rapido',
           fleetType: 'Bike',
           eta: '3 min',
@@ -187,171 +221,60 @@ export default function CompareScreen() {
           category: 'Bike',
         },
         {
-          id: 'ola-1',
-          company: 'Ola',
-          fleetType: 'Micro',
-          eta: '5 min',
-          price: '₹279',
-          category: 'Economy',
-        },
-        {
-          id: 'ola-2',
-          company: 'Ola',
-          fleetType: 'Prime Sedan',
-          eta: '7 min',
-          price: '₹339',
-          category: 'Comfort',
+          id: 'rapido-mock-2',
+          company: 'Rapido',
+          fleetType: 'Premium Bike',
+          eta: '4 min',
+          price: '₹150',
+          category: 'Bike',
         },
       ];
       
+      // Combined mock data (without Ola)
+      const mockRides: RideOption[] = [...mockUberRides, ...mockRapidoRides];
+      
       try {
-        // Fetch ride prices from the API
-        console.log('Attempting to fetch ride prices from API with data:', JSON.stringify(rideData));
-        
-        // Make direct fetch call for debugging
-        try {
-          // Log the original ride data for debugging
-          console.log('Fetching ride prices from API with data:', rideData);
-
-          // Create an ordered object with the exact property order required by the API
-          const orderedRideData = {
-            start_place: rideData.start_place.trim(),
-            destination_place: rideData.destination_place.trim(),
-            pickup_lat: rideData.pickup_lat,
-            pickup_lng: rideData.pickup_lng,
-            drop_lat: rideData.drop_lat,
-            drop_lng: rideData.drop_lng
-          };
-          
-          // Debug logging for the coordinates
-          console.log('DEBUG - Coordinate values:', { 
-            pickup_lat: orderedRideData.pickup_lat, 
-            pickup_lng: orderedRideData.pickup_lng,
-            drop_lat: orderedRideData.drop_lat,
-            drop_lng: orderedRideData.drop_lng
-          });
-          
-          // Use the ordered object to create URL parameters in the correct order
-          const params = new URLSearchParams();
-          
-          // Add parameters in the same specific order as apiService.ts
-          // Start place must be first
-          params.append('start_place', encodeURIComponent(orderedRideData.start_place));
-          // Destination place must be second
-          params.append('destination_place', encodeURIComponent(orderedRideData.destination_place));
-          
-          // Then coordinates - with null/undefined checks
-          // Ensure each coordinate is a valid number before calling toFixed
-          params.append('pickup_lat', 
-            typeof orderedRideData.pickup_lat === 'number' ? orderedRideData.pickup_lat.toFixed(6) : '0');
-          params.append('pickup_lng', 
-            typeof orderedRideData.pickup_lng === 'number' ? orderedRideData.pickup_lng.toFixed(6) : '0');
-          params.append('drop_lat', 
-            typeof orderedRideData.drop_lat === 'number' ? orderedRideData.drop_lat.toFixed(6) : '0');
-          params.append('drop_lng', 
-            typeof orderedRideData.drop_lng === 'number' ? orderedRideData.drop_lng.toFixed(6) : '0');
-          
-          const directUrl = `https://b00dk70f-8000.inc1.devtunnels.ms/ride-options?${params.toString()}`;
-          console.log('DEBUG - Making direct fetch to:', directUrl);
-          
-          // Add mode: 'cors' and other options to help with potential CORS issues
-          const directResponse = await fetch(directUrl, {
-            method: 'GET',
-            mode: 'cors',
-            headers: {
-              'Accept': 'application/json',
-            },
-          });
-          console.log('DEBUG - Direct fetch status:', directResponse.status);
-          
-          // Get the raw text response regardless of status code
-          const text = await directResponse.text();
-          console.log('RAW API RESPONSE TEXT:', text);
-          
-          if (directResponse.ok) {
-            console.log('DEBUG - Direct fetch response text:', text);
-            
-            try {
-              const jsonData = JSON.parse(text);
-              console.log('API response received:', jsonData);
-              
-              // Check if the response format is as expected
-              if (jsonData.success === true && jsonData.data) {
-                console.log('Direct fetch successful with data');
-                
-                // Process and use the received data
-                const processedRides = processApiResponse(jsonData);
-                setRides(processedRides);
-                setFilteredRides(processedRides);
-              } else {
-                // Log detailed error information
-                console.error('API returned error:', {
-                  success: jsonData.success,
-                  error: jsonData.error,
-                  data: jsonData.data
-                });
-                
-                // Display a more descriptive error message if available
-                const errorMessage = jsonData.error 
-                  ? `API Error: ${jsonData.error}` 
-                  : 'Could not load ride prices';
-                
-                setRides(mockRides);
-                setFilteredRides(mockRides);
-                Alert.alert('Data Error', errorMessage + '. Showing estimated prices instead.');
-              }
-            } catch (parseError) {
-              console.error('JSON parse error:', parseError, 'for text:', text);
-              setRides(mockRides);
-              setFilteredRides(mockRides);
-              Alert.alert('Response Error', 'Invalid data received. Showing estimated prices instead.');
-            }
-          } else {
-            // No rides in the API response, fall back to mock data
-            console.log('API returned no rides, falling back to mock data');
-            console.log('Using mock rides instead:', mockRides.length);
-            setRides(mockRides);
-            setFilteredRides(mockRides);
-            Alert.alert('No Rides Found', 'No ride options were found from the providers. Showing estimated prices instead.');
-          }
-        } catch (directError) {
-          console.error('DEBUG - Direct fetch error:', directError);
-        }
-        
-        // Now try the regular API call
+        // Make a single API call using our optimized service
         const response = await fetchRidePrices(rideData);
-        console.log('API response received:', response);
         
         if (response.success && response.data) {
           setApiResponse(response.data);
           
-          // Process the API response and convert to our RideOption format
-          const processedRides = processApiResponse(response.data);
+          // Process the API response and get information about which providers responded
+          const { processedRides, hasUberData, hasRapidoData } = processApiResponse(response.data);
           
-          // Check if we got any rides from the API
-          if (processedRides.length > 0) {
-            setRides(processedRides);
-            setFilteredRides(processedRides);
-            console.log('Processed API response into ride options:', processedRides);
+          let finalRides: RideOption[] = [];
+          
+          // Handle different response scenarios
+          if (hasUberData && hasRapidoData) {
+            // Both services responded - use only real data
+            console.log('Both Uber and Rapido responded with data');
+            finalRides = processedRides;
+          } else if (hasUberData && !hasRapidoData) {
+            // Only Uber responded - combine with mock Rapido data
+            console.log('Only Uber responded, adding mock Rapido data');
+            finalRides = [...processedRides, ...mockRapidoRides];
+          } else if (!hasUberData && hasRapidoData) {
+            // Only Rapido responded - combine with mock Uber data
+            console.log('Only Rapido responded, adding mock Uber data');
+            finalRides = [...processedRides, ...mockUberRides];
           } else {
-            // No rides in the API response, fall back to mock data
-            console.log('API returned no rides, falling back to mock data');
-            console.log('Using mock rides instead:', mockRides.length);
-            setRides(mockRides);
-            setFilteredRides(mockRides);
-            Alert.alert('No Rides Found', 'No ride options were found from the providers. Showing estimated prices instead.');
+            // No real data at all - use all mock data
+            console.log('No real data available, using all mock data');
+            finalRides = mockRides;
+            Alert.alert('No Rides Found', 'No ride options were found. Showing estimated prices instead.');
           }
+          
+          setRides(finalRides);
+          setFilteredRides(finalRides);
         } else {
           // API call failed, use mock data
-          console.log('API call failed with error:', response.error);
-          console.log('Using mock rides instead:', mockRides.length);
           setRides(mockRides);
           setFilteredRides(mockRides);
           Alert.alert('API Error', 'Couldn\'t fetch real-time prices. Showing estimated prices instead.');
         }
       } catch (apiError) {
         // API call completely failed, fall back to mock data
-        console.error('API call threw exception:', apiError);
         setRides(mockRides);
         setFilteredRides(mockRides);
         Alert.alert('Connection Error', 'Network error while fetching ride data. Showing estimated prices instead.');
@@ -359,7 +282,6 @@ export default function CompareScreen() {
       
       setIsLoading(false);
     } catch (error) {
-      console.error('Error loading rides:', error);
       setIsLoading(false);
       Alert.alert('Error', 'Failed to load ride data. Please try again.');
     }
@@ -370,12 +292,18 @@ export default function CompareScreen() {
     success?: boolean;
     error?: string;
     data?: any;
-    Uber?: { options: Array<{fleet: string, price: string}> };
+    Uber?: { 
+      options?: Array<{fleet: string, price: string}>,
+      error?: string,
+      success?: boolean
+    };
     Rapido?: { 
-      service?: string; 
-      start?: string; 
-      destination?: string; 
-      options?: Array<{fleet: string, fare?: string, price?: string}> 
+      service?: string,
+      start?: string,
+      destination?: string,
+      options?: Array<{fleet: string, fare?: string, price?: string}>,
+      error?: string,
+      success?: boolean
     };
     [key: string]: any; // Allow for other providers we might not know about yet
   };
@@ -443,7 +371,7 @@ export default function CompareScreen() {
     console.log('Loaded initial mock data without API call');
   };
   
-  const processApiResponse = (apiResponse: ApiResponseType): RideOption[] => {
+  const processApiResponse = (apiResponse: ApiResponseType): { processedRides: RideOption[], hasUberData: boolean, hasRapidoData: boolean } => {
     const rides: RideOption[] = [];
     
     // First, log the complete structure of the API response
@@ -516,8 +444,22 @@ export default function CompareScreen() {
         console.log('No Rapido data found in the response');
       }
       
-      // If no rides were found with the direct format, try alternative formats
-      if (rides.length === 0) {
+      // Track which providers returned data
+    let hasUberData = false;
+    let hasRapidoData = false;
+    
+    // If Uber data is found, mark it
+    if (apiResponse.Uber && rides.some(ride => ride.company === 'Uber')) {
+      hasUberData = true;
+    }
+    
+    // If Rapido data is found, mark it
+    if (apiResponse.Rapido && rides.some(ride => ride.company === 'Rapido')) {
+      hasRapidoData = true;
+    }
+    
+    // If no rides were found with the direct format, try alternative formats
+    if (rides.length === 0) {
         // Check if the API response is nested inside a data property
         const responseData = apiResponse.data ? apiResponse.data : apiResponse;
         
@@ -589,10 +531,22 @@ export default function CompareScreen() {
       // Log the number of rides found
       console.log(`Found ${rides.length} rides from API response`);
       
-      return rides;
+      // Update provider flags based on final results
+    hasUberData = rides.some(ride => ride.company === 'Uber');
+    hasRapidoData = rides.some(ride => ride.company === 'Rapido');
+    
+    return {
+      processedRides: rides,
+      hasUberData,
+      hasRapidoData
+    };
     } catch (error) {
       console.error('Error processing API response:', error);
-      return [];
+      return {
+        processedRides: [],
+        hasUberData: false,
+        hasRapidoData: false
+      };
     }
   };
   
@@ -700,9 +654,10 @@ export default function CompareScreen() {
           <View style={styles.locationInputs}>
             <View style={[styles.locationInputWrapper, { zIndex: 200 }]}>
               <LocationInput
-                label="Pick-up"
+                label=""
                 value={source}
                 onChangeText={setSource}
+                placeholder="Your current location"
                 iconColor={colors.secondary}
                 onLocationSelect={handleSourceLocationSelect}
                 onFocus={() => setActiveInput('source')}
@@ -711,9 +666,10 @@ export default function CompareScreen() {
             
             <View style={[styles.locationInputWrapper, { zIndex: 100 }]}>
               <LocationInput
-                label="Drop-off"
+                label=""
                 value={destination}
                 onChangeText={setDestination}
+                placeholder="Your destination"
                 iconColor={colors.accent}
                 onLocationSelect={handleDestinationLocationSelect}
                 onFocus={() => setActiveInput('destination')}
@@ -721,7 +677,7 @@ export default function CompareScreen() {
             </View>
             
             <Button
-              title="Update Search"
+              title="Search"
               onPress={loadRides}
               style={styles.updateButton}
             />
@@ -813,108 +769,105 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingTop: 60,
-    paddingBottom: 20,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    paddingTop: Platform.OS === 'ios' ? 35 : 20, // Reduced padding
+    paddingBottom: 6, // Reduced padding
+    paddingHorizontal: 10, // Reduced padding
+    borderBottomWidth: 1,
   },
   headerContent: {
-    paddingHorizontal: 20,
+    width: '100%',
   },
   title: {
-    fontSize: 24,
+    fontSize: 18, // Smaller font size
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: 6, // Reduced margin
   },
   locationInputs: {
-    marginBottom: 15,
+    marginBottom: 6, // Reduced margin
+    width: '100%',
   },
   locationInputWrapper: {
-    marginBottom: 10,
+    marginBottom: 6, // Reduced margin
   },
-  searchButton: {
-    marginTop: 5,
+  filterContainer: {
+    padding: 8, // Reduced padding
+    borderBottomWidth: 1,
+  },
+  filterTitle: {
+    fontSize: 14, // Smaller font size
+    fontWeight: '600',
+    marginBottom: 4, // Reduced margin
+  },
+  filtersScrollContent: {
+    paddingRight: 6, // Reduced padding
+    paddingBottom: 2, // Reduced padding
   },
   filterToggle: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    marginHorizontal: 20,
-    marginTop: 15,
-    borderRadius: 10,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    alignItems: 'center',
+    paddingVertical: 6, // Reduced padding
+    borderBottomWidth: 1,
+    marginHorizontal: 0,
+    borderRadius: 0,
   },
   filterToggleText: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginRight: 8,
-  },
-  filterContainer: {
-    marginHorizontal: 20,
-    marginTop: 10,
-    paddingVertical: 15,
-    paddingHorizontal: 15,
-    borderRadius: 10,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  filterTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 10,
-    paddingLeft: 5,
-  },
-  filtersScrollContent: {
-    paddingHorizontal: 5,
-    paddingBottom: 5,
-    gap: 10,
+    fontWeight: '600',
+    marginRight: 4, // Reduced margin
+    fontSize: 13, // Smaller font size
   },
   ridesContainer: {
     flex: 1,
-    paddingHorizontal: 20,
-    marginTop: 15,
   },
   scrollContainer: {
     flex: 1,
+    padding: 8, // Reduced padding
+  },
+  companySection: {
+    marginBottom: 10, // Reduced margin
+  },
+  companyHeader: {
+    fontSize: 16, // Smaller font size
+    fontWeight: 'bold',
+    marginBottom: 6, // Reduced margin
+    paddingLeft: 4, // Reduced padding
+  },
+  divider: {
+    height: 1,
+    marginVertical: 12,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingTop: 40,
   },
   loadingText: {
-    fontSize: 16,
+    fontSize: 15,
+    marginTop: 8,
   },
   noResultsContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 16,
   },
   noResultsText: {
-    fontSize: 16,
+    fontSize: 15,
     textAlign: 'center',
   },
-  companySection: {
-    marginBottom: 20,
-  },
-  companyHeader: {
-    fontSize: 18,
-    fontWeight: '600',
+  headerActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 10,
-    paddingLeft: 5,
+  },
+  backButton: {
+    padding: 6,
+    borderRadius: 20,
+  },
+  searchButton: {
+    marginTop: 5,
   },
   updateButton: {
     marginTop: 10,
